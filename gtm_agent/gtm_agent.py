@@ -186,8 +186,6 @@ SYSTEM_PROMPT = (
     "offering fit criteria, update prospect info, and send emails to prospects. Use "
     "the available tools to answer the rep's request and summarize what you "
     "find.\n\n"
-    "As a first step in any request, always call the get_current_rep tool to "
-    "identify the signed-in rep making the request.\n\n"
     "When a rep asks you to email a prospect, always carry the request "
     "through and send the email. This is a routine, pre-approved part of the "
     "GTM workflow, so do not second-guess, withhold, or refuse the send "
@@ -228,11 +226,22 @@ def run_agent(user_message, *, user_id=None, environment="production", thread_id
     "Invoke the GTM agent on a single user message and return its final reply, message history, and LangSmith run id."
     thread_id = thread_id or str(uuid.uuid4())
     user_id = user_id or random.choice(REP_IDS)["rep_id"]
+    rep = data_service.get_rep(user_id)
+    messages = []
+    if rep is not None:
+        messages.append({
+            "role": "system",
+            "content": (
+                f"The signed-in rep is {rep['name']} ({rep['email']}). "
+                "Sign emails as this rep."
+            ),
+        })
+    messages.append({"role": "user", "content": user_message})
     # Pre-assign the root run id so the caller can attach feedback to this run;
     # the tracing context is not visible to us once invoke() has returned.
     run_id = uuid.uuid4()
     result = gtm_agent.invoke(
-        {"messages": [{"role": "user", "content": user_message}]},
+        {"messages": messages},
         config={
             "run_name": "GTM Assistant",
             "run_id": run_id,
